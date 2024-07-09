@@ -17,11 +17,7 @@ Type pluginType;
 
 if (string.Equals(mode, "AssemblyLoad", StringComparison.OrdinalIgnoreCase))
 {
-    AppDomain.CurrentDomain.AssemblyResolve += (sender, e) =>
-    {
-        Console.Error.WriteLine($"AppDomain.CurrentDomain.AssemblyResolve: {e.Name}");
-        return null;
-    };
+    HookAppDomainResolve();
 
     var typeNameParts = pluginTypeName.Split(',', count: 2);
     var typeName = typeNameParts[0].Trim();
@@ -34,6 +30,8 @@ if (string.Equals(mode, "AssemblyLoad", StringComparison.OrdinalIgnoreCase))
 }
 else if (string.Equals(mode, "AssemblyLoadContext", StringComparison.OrdinalIgnoreCase))
 {
+    HookAppDomainResolve();
+
     var context = new AssemblyLoadContextExtensionLoader("plugins");
     pluginType = context.GetExtensionType(pluginTypeName);
 }
@@ -52,6 +50,25 @@ else
 var plugin = (IPlugin)Activator.CreateInstance(pluginType)!;
 plugin.DoSomething(args[2..]);
 
-
-
 return 0;
+
+static void HookAppDomainResolve()
+{
+    AppDomain.CurrentDomain.AssemblyResolve += (sender, e) =>
+    {
+        Console.Error.WriteLine($"AppDomain.CurrentDomain.AssemblyResolve: {e.Name}");
+
+        var assemblyName = new AssemblyName(e.Name);
+
+        try
+        {
+            var assemblyPath = Path.Combine("plugins", assemblyName.Name + ".dll");
+            return Assembly.LoadFrom(assemblyPath);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+            return null;
+        }
+    };
+}
